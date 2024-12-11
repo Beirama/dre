@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import plotly.graph_objects as go
+import io
 
 # Função para carregar os dados de um arquivo CSV
 def load_data(file_path):
@@ -32,6 +33,22 @@ if "email_mkt_data" not in st.session_state:
     st.session_state.email_mkt_data = load_data("email_mkt_data.csv")
 if "youtube_data" not in st.session_state:
     st.session_state.youtube_data = load_data("youtube_data.csv")
+if "midia_investimento_data" not in st.session_state:
+    st.session_state.midia_investimento_data = load_data("midia_investimento_data.csv")
+if "midia_investimento_semanal_data" not in st.session_state:
+    st.session_state.midia_investimento_semanal_data = load_data("midia_investimento_semanal_data.csv")
+if "custos_data" not in st.session_state:
+    st.session_state.custos_data = load_data("custos_data.csv")
+if "site_beirama_data" not in st.session_state:
+    st.session_state.site_beirama_data = load_data("site_beirama_data.csv")
+if "site_beirama_semanal_data" not in st.session_state:
+    st.session_state.site_beirama_semanal_data = load_data("site_beirama_semanal_data.csv")
+if "resultados_google_data" not in st.session_state:
+    st.session_state.resultados_google_data = load_data("resultados_google_data.csv")
+if "resultados_meta_beirama_data" not in st.session_state:
+    st.session_state.resultados_meta_beirama_data = load_data("resultados_meta_beirama_data.csv")
+if "performance_data" not in st.session_state:
+    st.session_state.performance_data = load_data("performance_data.csv")
 if "selected_network" not in st.session_state:
     st.session_state.selected_network = None
 
@@ -52,7 +69,28 @@ with st.expander("Redes Sociais"):
         st.session_state.selected_network = "E-mail MKT"
     if st.button("YouTube Orgânico"):
         st.session_state.selected_network = "YouTube Orgânico"
+    if st.button("Investimentos em mídia"):
+        st.session_state.selected_network = "Investimento em Mídia"
+    if st.button("Custos"):
+        st.session_state.selected_network = "Custos"
+    if "site_beirama_data" not in st.session_state:
+        st.session_state.site_beirama_data = load_data("site_beirama_data.csv")
+    if st.button("Site Beirama"):
+        st.session_state.selected_network = "Site Beirama"
+    if st.button("Resultados Google"):
+        st.session_state.selected_network = "Resultados Google"
+    if st.button("Resultados Meta BEIRAMA"):
+        st.session_state.selected_network = "Resultados Meta BEIRAMA"
+    if st.button("Performance"):
+        st.session_state.selected_network = "Performance"
 
+with st.expander("Formulários Semanais"):
+    st.write("Selecione um formulário semanal abaixo:")
+
+    if st.button("Site Beirama (Semanal)"):
+        st.session_state.selected_network = "Site Beirama (Semanal)"
+    if st.button("Investimentos em mídia (semanal)"):
+        st.session_state.selected_network = "Investimento em Mídia (Semanal)"
 
 def show_instagram_graphs():
     st.title("Gráficos do Instagram")
@@ -568,6 +606,88 @@ def show_youtube_graphs():
     )
     st.plotly_chart(fig_scatter)
 
+def show_investimento_graficos():
+    st.title("Gráficos de Investimento em Mídia")
+    
+    if not st.session_state.midia_investimento_data:
+        st.info("Nenhum dado disponível para gerar gráficos. Preencha o formulário primeiro.")
+        return
+
+    df = pd.DataFrame(st.session_state.midia_investimento_data)
+    df['Data'] = pd.to_datetime(df['Data'])
+    df.sort_values('Data', inplace=True)
+
+    # Converte colunas para numéricas
+    cols_to_numeric = [
+        "Google(Display)", "Google(Search)", "Google(Youtube)", 
+        "Meta Ads", "LinkedIn ADS"
+    ]
+    for col in cols_to_numeric:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Remove linhas com valores inválidos
+    df.dropna(subset=cols_to_numeric, inplace=True)
+
+    # Adiciona uma coluna para o total de gastos
+    df['Total Gastos'] = df[cols_to_numeric].sum(axis=1)
+
+    # Agrupa os dados por mês
+    df['Mês'] = pd.Categorical(df['Mês'], categories=[
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ], ordered=True)
+
+    total_por_mes = df.groupby('Mês')['Total Gastos'].sum().reindex(df['Mês'].cat.categories)
+
+    # Paleta de cores personalizada
+    color_total = "#FF5733"  # Vermelho para Total
+
+    ### GRÁFICO DE BARRAS ###
+    st.subheader("Total de Gastos por Mês")
+    fig_bar_total = go.Figure()
+    fig_bar_total.add_trace(go.Bar(
+        x=total_por_mes.index,
+        y=total_por_mes.values,
+        name="Total de Gastos",
+        marker_color=color_total
+    ))
+    fig_bar_total.update_layout(
+        title="Total de Gastos por Mês",
+        xaxis_title="Mês",
+        yaxis_title="Total (R$)",
+        xaxis=dict(tickangle=-45),
+        hovermode="x unified",
+        template="plotly_white"
+    )
+    st.plotly_chart(fig_bar_total)
+
+    # Mostra o total acumulado
+    total_acumulado = total_por_mes.sum()
+    st.markdown(f"### Total Geral de Investimentos: **R$ {total_acumulado:,.2f}**")
+
+    ### GRÁFICO DE LINHAS ###
+    st.subheader("Distribuição de Gastos por Mídia ao Longo do Tempo")
+    fig_line = go.Figure()
+    for col in cols_to_numeric:
+        gastos_por_mes = df.groupby('Mês')[col].sum().reindex(df['Mês'].cat.categories)
+        fig_line.add_trace(go.Scatter(
+            x=gastos_por_mes.index,
+            y=gastos_por_mes.values,
+            mode='lines+markers',
+            name=col,
+            line=dict(width=2.5),
+            marker=dict(size=8)
+        ))
+    fig_line.update_layout(
+        title="Gastos por Tipo de Mídia",
+        xaxis_title="Mês",
+        yaxis_title="Gastos (R$)",
+        xaxis=dict(tickangle=-45),
+        hovermode="x unified",
+        template="plotly_white"
+    )
+    st.plotly_chart(fig_line)
+
 
 # Função para exibir tabelas e formulários
 def show_tabs(data_key, fields, title, file_path):
@@ -592,11 +712,25 @@ def show_tabs(data_key, fields, title, file_path):
                 save_data(file_path, st.session_state[data_key])
                 st.success("Dados enviados com sucesso!")
 
+
     with abas[1]:
         st.title(f"Tabela de Dados de {title}")
         if st.session_state[data_key]:
             df = pd.DataFrame(st.session_state[data_key])
             st.table(df)
+
+            # Botão para exportar os dados para Excel
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name=title)
+            buffer.seek(0)
+
+            st.download_button(
+                label="Exportar para Excel",
+                data=buffer,
+                file_name=f"{title}_dados.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
             # Seleção de linha para exclusão
             selected_index = st.selectbox(
@@ -613,6 +747,7 @@ def show_tabs(data_key, fields, title, file_path):
         else:
             st.info("Nenhum dado disponível. Preencha o formulário na aba 'Formulário'.")
 
+
     with abas[2]:
         if title == "Instagram":
             show_instagram_graphs()
@@ -624,9 +759,13 @@ def show_tabs(data_key, fields, title, file_path):
             show_email_mkt_graphs()
         if title == "YouTube Orgânico":
             show_youtube_graphs()
+        if title == "Investimento em Mídia":
+            show_investimento_graficos()
 
 
-# Exibe as abas para o Instagram
+
+
+# Exibe as abas das redes
 if st.session_state.selected_network == "Instagram":
     show_tabs(
         data_key="instagram_data",
@@ -639,12 +778,12 @@ if st.session_state.selected_network == "Instagram":
             {"name": "Alcance", "label": "Alcance:", "type": "text"},
             {"name": "Engajamento", "label": "Engajamento:", "type": "text"},
             {"name": "Seguidores", "label": "Seguidores:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
         ],
         title="Instagram",
         file_path="instagram_data.csv"
     )
 
-# Exibe as abas para o Facebook
 if st.session_state.selected_network == "Facebook":
     show_tabs(
         data_key="facebook_data",
@@ -658,12 +797,12 @@ if st.session_state.selected_network == "Facebook":
             {"name": "Engajamento", "label": "Engajamento:", "type": "text"},
             {"name": "Seguidores", "label": "Seguidores:", "type": "text"},
             {"name": "Cliques", "label": "Cliques:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
         ],
         title="Facebook",
         file_path="facebook_data.csv"
     )
 
-# Exibe as abas para o LinkedIn
 if st.session_state.selected_network == "LinkedIn":
         show_tabs(
             data_key="linkedin_data",
@@ -677,12 +816,12 @@ if st.session_state.selected_network == "LinkedIn":
                 {"name": "Cliques", "label": "Cliques:", "type": "text"},
                 {"name": "Engajamento", "label": "Engajamento:", "type": "text"},
                 {"name": "Seguidores", "label": "Seguidores:", "type": "text"},
+                {"name": "Observação", "label": "Observação:", "type": "text"},
             ],
             title="LinkedIn",
             file_path="linkedin_data.csv"
         )
     
-# Exibe as abas para o E-mail MKT
 if st.session_state.selected_network == "E-mail MKT":
     show_tabs(
         data_key="email_mkt_data",
@@ -696,13 +835,12 @@ if st.session_state.selected_network == "E-mail MKT":
             {"name": "Cliques", "label": "Cliques:", "type": "text"},
             {"name": "Descadastro", "label": "Descadastro:", "type": "text"},
             {"name": "Receita Gerada", "label": "Receita Gerada:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
         ],
         title="E-mail MKT",
         file_path="email_mkt_data.csv"
     )
 
-
-# Exibe as abas para o YouTube Orgânico
 if st.session_state.selected_network == "YouTube Orgânico":
     show_tabs(
         data_key="youtube_data",
@@ -715,8 +853,165 @@ if st.session_state.selected_network == "YouTube Orgânico":
             {"name": "Visualizações", "label": "Visualizações:", "type": "text"},
             {"name": "Duração Média da Visualização", "label": "Duração Média da Visualização:", "type": "text"},
             {"name": "Inscritos", "label": "Inscritos:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
         ],
         title="YouTube Orgânico",
         file_path="youtube_data.csv"
     )
 
+if st.session_state.selected_network == "Investimento em Mídia":
+    show_tabs(
+        data_key="midia_investimento_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Mês", "label": "Mês:", "type": "select", "options": [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]},
+            {"name": "Google(Display)", "label": "Google (Display):", "type": "text"},
+            {"name": "Google(Search)", "label": "Google (Search):", "type": "text"},
+            {"name": "Google(Youtube)", "label": "Google (YouTube):", "type": "text"},
+            {"name": "Meta Ads", "label": "Meta Ads:", "type": "text"},
+            {"name": "LinkedIn ADS", "label": "LinkedIn ADS:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Investimento em Mídia",
+        file_path="midia_investimento_data.csv"
+    )
+
+if st.session_state.selected_network == "Custos":
+    show_tabs(
+        data_key="custos_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Mês", "label": "Mês:", "type": "select", "options": [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]},
+            {"name": "Beicast Aluguel espaço", "label": "Beicast Aluguel espaço:", "type": "text"},
+            {"name": "Shopify", "label": "Shopify:", "type": "text"},
+            {"name": "Custo Ramper MKT", "label": "Custo Ramper MKT:", "type": "text"},
+            {"name": "Alex Gestor de tráfego", "label": "Alex Gestor de tráfego:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Custos",
+        file_path="custos_data.csv"
+    )
+
+if st.session_state.selected_network == "Site Beirama":
+    show_tabs(
+        data_key="site_beirama_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Mês", "label": "Mês:", "type": "select", "options": [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]},
+            {"name": "Sessões", "label": "Sessões:", "type": "text"},
+            {"name": "Taxa de Rejeição (%)", "label": "Taxa de Rejeição (%):", "type": "text"},
+            {"name": "Duração Média da Sessão", "label": "Duração Média da Sessão (min):", "type": "text"},
+            {"name": "Taxa de Conversão (%)", "label": "Taxa de Conversão (%):", "type": "text"},
+            {"name": "Páginas Mais Acessadas", "label": "Páginas Mais Acessadas:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Site Beirama",
+        file_path="site_beirama_data.csv"
+    )
+
+if st.session_state.selected_network == "Resultados Google":
+
+    show_tabs(
+        data_key="resultados_google_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Mês", "label": "Mês:", "type": "select", "options": [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]},
+            {"name": "Cliques (Search)", "label": "Cliques (Google Search):", "type": "text"},
+            {"name": "Cliques (Display)", "label": "Cliques (Google Display):", "type": "text"},
+            {"name": "Contatos", "label": "Contatos (Cadastros/Conversões):", "type": "text"},
+            {"name": "Negócios/Propostas", "label": "Negócios/Propostas (Volume):", "type": "text"},
+            {"name": "Fechamento", "label": "Fechamento:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Resultados Google",
+        file_path="resultados_google_data.csv"
+    )
+
+if st.session_state.selected_network == "Resultados Meta BEIRAMA":
+
+    show_tabs(
+        data_key="resultados_meta_beirama_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Mês", "label": "Mês:", "type": "select", "options": [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]},
+            {"name": "Cliques (Search)", "label": "Cliques (Google Search):", "type": "text"},
+            {"name": "Cliques (Display)", "label": "Cliques (Google Display):", "type": "text"},
+            {"name": "Contatos", "label": "Contatos (Cadastros/Conversões):", "type": "text"},
+            {"name": "Negócios/Propostas", "label": "Negócios/Propostas (Volume):", "type": "text"},
+            {"name": "Fechamento", "label": "Fechamento:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Resultados Meta BEIRAMA",
+        file_path="resultados_meta_beirama_data.csv"
+    )
+
+if st.session_state.selected_network == "Performance":
+    show_tabs(
+        data_key="performance_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Mês", "label": "Mês:", "type": "select", "options": [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]},
+            {"name": "Margem de Contribuição", "label": "Margem de Contribuição (%):", "type": "text"},
+            {"name": "Ticket Médio", "label": "Ticket Médio (R$):", "type": "text"},
+            {"name": "ROI", "label": "ROI (%):", "type": "text"},
+            {"name": "ROAS", "label": "ROAS:", "type": "text"},
+            {"name": "CPV", "label": "CPV (R$):", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Performance",
+        file_path="performance_data.csv"
+    )
+
+if st.session_state.selected_network == "Site Beirama (Semanal)":
+    show_tabs(
+        data_key="site_beirama_semanal_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Sessões", "label": "Sessões:", "type": "text"},
+            {"name": "Taxa de Rejeição", "label": "Taxa de Rejeição (%):", "type": "text"},
+            {"name": "Duração Média da Sessão", "label": "Duração Média da Sessão (min):", "type": "text"},
+            {"name": "Taxa de Conversão", "label": "Taxa de Conversão (%):", "type": "text"},
+            {"name": "Páginas mais Acessadas", "label": "Páginas mais Acessadas:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Site Beirama (Semanal)",
+        file_path="site_beirama_semanal_data.csv"
+    )
+
+if st.session_state.selected_network == "Investimento em Mídia (Semanal)":
+    show_tabs(
+        data_key="midia_investimento_semanal_data",
+        fields=[
+            {"name": "Data", "label": "Data:", "type": "date"},
+            {"name": "Mês", "label": "Mês:", "type": "select", "options": [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ]},
+            {"name": "Google(Display)", "label": "Google (Display):", "type": "text"},
+            {"name": "Google(Search)", "label": "Google (Search):", "type": "text"},
+            {"name": "Google(Youtube)", "label": "Google (YouTube):", "type": "text"},
+            {"name": "Meta Ads", "label": "Meta Ads:", "type": "text"},
+            {"name": "LinkedIn ADS", "label": "LinkedIn ADS:", "type": "text"},
+            {"name": "Observação", "label": "Observação:", "type": "text"},
+        ],
+        title="Investimento em Mídia",
+        file_path="midia_investimento_semanal_data.csv"
+    )
